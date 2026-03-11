@@ -286,6 +286,9 @@ resumen = filt.groupby("Refaccion").agg(
     Costo_Promedio    =("Costo",      "mean"),
     Equipos_Afectados =("Equipment",  "nunique"),
 ).reset_index()
+resumen["Cantidad_Total"]    = pd.to_numeric(resumen["Cantidad_Total"], errors="coerce").fillna(0)
+resumen["Costo_Total"]       = pd.to_numeric(resumen["Costo_Total"],    errors="coerce").fillna(0)
+resumen["Costo_Promedio"]    = pd.to_numeric(resumen["Costo_Promedio"], errors="coerce").fillna(0)
 resumen = resumen.sort_values("Cantidad_Total", ascending=False).reset_index(drop=True)
 
 # Nivel de criticidad por cantidad normalizada
