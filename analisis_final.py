@@ -303,10 +303,10 @@ def nivel_criticidad(score):
 
 resumen["Nivel"] = resumen["Qty_norm"].apply(nivel_criticidad)
 
-critical       = resumen.head(top_n).copy()
-critical_chart = critical.sort_values("Cantidad_Total", ascending=True)
+critical = resumen.head(top_n).copy()
 critical["Costo_Total_fmt"]    = critical["Costo_Total"].map("${:,.0f}".format)
 critical["Cantidad_Total_fmt"] = critical["Cantidad_Total"].map("{:,.0f}".format)
+critical_chart = critical.sort_values("Cantidad_Total", ascending=True)
 
 col_chart, col_table = st.columns([3, 2])
 with col_chart:
