@@ -199,6 +199,26 @@ k4.markdown(metric_card("Costo promedio/refacción", f"${filt['Costo'].mean():,.
 
 st.divider()
 
+
+# Inventarios Mínimos y Máximos
+st.subheader("Inventarios Mínimos y Máximos de Lubricantes")
+st.caption("Niveles calculados con base en consumo 2023-2026 y lead times por tipo de flota.")
+
+# Tarjetas de resumen — usan color: inherit para respetar el tema
+t1, t2, t3 = st.columns(3)
+for col, (_, row) in zip([t1, t2, t3], totales_inv.iterrows()):
+    col.markdown(
+        f'<div class="inv-card">'
+        f'<p class="inv-label">🛢️ {row["Refaccion"]}</p>'
+        f'<p class="inv-value">{int(row["Cantidad_Total"]):,} unid.</p>'
+        f'<p class="inv-detail">Costo total: <b>${row["Costo_Total"]:,.0f}</b>'
+        f' &nbsp;|&nbsp; Precio pond.: <b>${row["Precio_Ponderado"]:.2f}</b>/unid.</p>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+# Tabla min/max — sin colorear filas para evitar conflictos con dark mode;
+# se usa st.dataframe nativo que ya respeta el tema automáticamente.
 st.markdown("##### Niveles de inventario por producto y flota")
 flotas_mostrar = (["Flota China"] if sel_flota == "Flota China"
                   else ["Flota A/E"] if sel_flota == "Flota A/E"
@@ -217,8 +237,10 @@ for prod in productos_inv:
             "Inv. Máx. (MAX LT)": round(float(d["inv_max_max"]), 1) if d["inv_max_max"] else "—",
         })
 
+# Sin .style para no pisar los colores del tema
 st.dataframe(pd.DataFrame(rows_table), hide_index=True, use_container_width=True)
 
+# Gráfico barras min/max — fondo transparente para adaptarse al tema
 st.markdown("##### Comparación visual Mínimo vs Máximo (AVG Lead Time)")
 chart_data = []
 for prod in productos_inv:
@@ -241,9 +263,9 @@ fig_minmax.update_layout(
     height=370,
     xaxis_tickangle=-15,
     legend_title="",
-    paper_bgcolor="rgba(0,0,0,0)",   
+    paper_bgcolor="rgba(0,0,0,0)",   # transparente → respeta dark/light
     plot_bgcolor="rgba(0,0,0,0)",
-    font_color=None,                 
+    font_color=None,                  # heredado del tema
 )
 st.plotly_chart(fig_minmax, use_container_width=True)
 
@@ -270,26 +292,54 @@ st.divider()
 
 
 # Refacciones Críticas
-st.subheader(f"Top {top_n} Refacciones Críticas (por costo total)")
+st.subheader(f"Top {top_n} Refacciones Críticas (por score: frecuencia + duración)")
 
-critical = (
-    filt.groupby("Refaccion")["Costo"]
-    .agg(Costo_Total="sum", Frecuencia="count")
-    .sort_values("Costo_Total", ascending=False)
-    .head(top_n).reset_index()
-)
-critical["% del Total"]     = (critical["Costo_Total"] / critical["Costo_Total"].sum() * 100).round(1)
+# --- Calcular duración por orden ---
+_ot = df_ot.copy()
+_ot["Created On"]    = pd.to_datetime(_ot["Created On"],  errors="coerce")
+_ot["Changed On"]    = pd.to_datetime(_ot["Changed On"],  errors="coerce")
+_ot["Duracion_dias"] = (_ot["Changed On"] - _ot["Created On"]).dt.days
+
+# Unir refacciones filtradas con duración y filtrar duraciones válidas
+_ref = filt.merge(_ot[["Order", "Duracion_dias"]], on="Order", how="left")
+_ref = _ref[(_ref["Duracion_dias"] > 0) & (_ref["Duracion_dias"] <= 383)]
+
+# Agrupar por refacción
+resumen = _ref.groupby("Refaccion").agg(
+    Frecuencia        =("Order",         "count"),
+    Duracion_Promedio =("Duracion_dias",  "mean"),
+    Duracion_Max      =("Duracion_dias",  "max"),
+    Costo_Promedio    =("Costo",          "mean"),
+    Costo_Total       =("Costo",          "sum"),
+    Equipos_Afectados =("Equipment",      "nunique"),
+).reset_index()
+
+# Score: 60% frecuencia + 40% duración (normalizado)
+resumen["Freq_norm"] = (resumen["Frecuencia"] - resumen["Frecuencia"].min()) / (resumen["Frecuencia"].max() - resumen["Frecuencia"].min())
+resumen["Dur_norm"]  = (resumen["Duracion_Promedio"] - resumen["Duracion_Promedio"].min()) / (resumen["Duracion_Promedio"].max() - resumen["Duracion_Promedio"].min())
+resumen["Score_Criticidad"] = (resumen["Freq_norm"] * 0.6) + (resumen["Dur_norm"] * 0.4)
+resumen = resumen.sort_values("Score_Criticidad", ascending=False).reset_index(drop=True)
+
+def nivel_criticidad(score):
+    if score >= 0.7:   return "🔴 CRÍTICA"
+    elif score >= 0.4: return "🟡 MEDIA"
+    else:              return "🟢 BAJA"
+
+resumen["Nivel"] = resumen["Score_Criticidad"].apply(nivel_criticidad)
+
+critical       = resumen.head(top_n).copy()
+critical_chart = critical.sort_values("Score_Criticidad", ascending=True)
 critical["Costo_Total_fmt"] = critical["Costo_Total"].map("${:,.0f}".format)
 
 col_chart, col_table = st.columns([3, 2])
 with col_chart:
     fig_bar = px.bar(
-        critical.sort_values("Costo_Total"),
-        x="Costo_Total", y="Refaccion", orientation="h",
-        color="Costo_Total", color_continuous_scale="Reds",
-        text="Costo_Total_fmt",
-        labels={"Costo_Total": "Costo Total (MXN)", "Refaccion": ""},
-        title="Costo acumulado por refacción",
+        critical_chart,
+        x="Score_Criticidad", y="Refaccion", orientation="h",
+        color="Score_Criticidad", color_continuous_scale="Reds",
+        text=critical_chart["Score_Criticidad"].map("{:.3f}".format),
+        labels={"Score_Criticidad": "Score de Criticidad", "Refaccion": ""},
+        title="Score de criticidad por refacción (frecuencia + duración)",
     )
     fig_bar.update_traces(textposition="outside")
     fig_bar.update_layout(
@@ -304,8 +354,12 @@ with col_chart:
 
 with col_table:
     st.markdown("#### Detalle")
-    disp = critical[["Refaccion", "Costo_Total_fmt", "Frecuencia", "% del Total"]].copy()
-    disp.columns = ["Refacción", "Costo Total", "Frecuencia", "% Total"]
+    disp = critical[["Refaccion", "Nivel", "Frecuencia", "Duracion_Promedio", "Duracion_Max", "Costo_Promedio", "Equipos_Afectados", "Score_Criticidad"]].copy()
+    disp["Duracion_Promedio"] = disp["Duracion_Promedio"].map("{:.1f} días".format)
+    disp["Duracion_Max"]      = disp["Duracion_Max"].map("{:.0f} días".format)
+    disp["Costo_Promedio"]    = disp["Costo_Promedio"].map("${:,.2f}".format)
+    disp["Score_Criticidad"]  = disp["Score_Criticidad"].map("{:.3f}".format)
+    disp.columns = ["Refacción", "Nivel", "Frecuencia", "Dur. Promedio", "Dur. Máx.", "Costo Prom.", "Equipos", "Score"]
     st.dataframe(disp, hide_index=True, use_container_width=True, height=460)
 
 st.divider()
@@ -364,27 +418,18 @@ st.divider()
 
 
 # Scatter Criticidad
-st.subheader("Análisis de Criticidad: Frecuencia vs Costo Unitario")
+st.subheader("Análisis de Criticidad: Frecuencia vs Duración Promedio")
 st.caption("Las refacciones en la esquina superior derecha son las más críticas.")
 
-scatter_df = (
-    filt.groupby("Refaccion")["Costo"]
-    .agg(Costo_Total="sum", Frecuencia="count", Costo_Promedio="mean")
-    .reset_index()
-)
-scatter_df["Criticidad"] = (
-    (scatter_df["Costo_Total"] - scatter_df["Costo_Total"].min()) /
-    (scatter_df["Costo_Total"].max() - scatter_df["Costo_Total"].min())
-)
 fig_scatter = px.scatter(
-    scatter_df.head(100),
-    x="Frecuencia", y="Costo_Promedio", size="Costo_Total", color="Criticidad",
+    resumen.head(100),
+    x="Frecuencia", y="Duracion_Promedio", size="Equipos_Afectados", color="Score_Criticidad",
     color_continuous_scale="RdYlGn_r", hover_name="Refaccion",
-    hover_data={"Costo_Total": ":,.0f", "Frecuencia": True, "Costo_Promedio": ":,.0f"},
+    hover_data={"Costo_Total": ":,.0f", "Frecuencia": True, "Duracion_Promedio": ":.1f", "Equipos_Afectados": True, "Score_Criticidad": ":.3f"},
     labels={"Frecuencia": "Frecuencia de uso",
-            "Costo_Promedio": "Costo Promedio por Uso (MXN)",
-            "Costo_Total": "Costo Total (MXN)"},
-    title="Top 100 refacciones – tamaño = costo total",
+            "Duracion_Promedio": "Duración Promedio de Cambio (días)",
+            "Score_Criticidad": "Score"},
+    title="Top 100 refacciones – tamaño = equipos afectados",
 )
 fig_scatter.update_layout(
     height=450,
