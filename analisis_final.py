@@ -173,7 +173,7 @@ sel_tipo  = st.sidebar.selectbox("Tipo de equipo", tipos)
 sel_marca = st.sidebar.selectbox("Marca", marcas)
 sel_year  = st.sidebar.selectbox("Año", years)
 top_n     = st.sidebar.slider("Top N refacciones críticas", 5, 30, 15)
-sel_flota = st.sidebar.radio("Flota (inventarios)", ["Flota China", "Flota A/E", "Ambas"])
+sel_flota = st.sidebar.radio("Flota (inventarios)", ["Flota China", "Flota A/E", "Ambas"], index=2)
 
 filt = df.copy()
 if sel_tipo  != "Todos": filt = filt[filt["TIPO"]  == sel_tipo]
