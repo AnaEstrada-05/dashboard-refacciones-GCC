@@ -204,8 +204,8 @@ for prod in productos_inv:
 df_minmax = pd.DataFrame(rows_table)
 
 def color_rows(row):
-    color = "#fefce8" if "China" in str(row["Flota"]) else "#f0fdf4"
-    return [f"background-color: {color}"] * len(row)
+    color = "#000000" if "China" in str(row["Flota"]) else "#000000"
+    return [f"background-color: white"] * len(row)
 
 st.dataframe(df_minmax.style.apply(color_rows, axis=1),
              hide_index=True, use_container_width=True)
