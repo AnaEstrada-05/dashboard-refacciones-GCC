@@ -15,7 +15,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Estilos ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     .metric-card {
@@ -39,7 +38,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Carga de datos ────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data(path: str):
     df_eq  = pd.read_excel(path, sheet_name="Equipos")
@@ -64,20 +62,18 @@ def load_data(path: str):
     return merged, df_eq, df_ot
 
 
-# ── Ruta del archivo ──────────────────────────────────────────────────────────
 FILE_PATH = "info_TEC_limpio.xlsx"   # Coloca el .xlsx en la misma carpeta
 
 try:
     df, df_eq, df_ot = load_data(FILE_PATH)
 except FileNotFoundError:
-    uploaded = st.file_uploader("📂 Sube el archivo info_TEC_limpio.xlsx", type="xlsx")
+    uploaded = st.file_uploader("Sube el archivo info_TEC_limpio.xlsx", type="xlsx")
     if uploaded is None:
         st.info("Sube el archivo Excel para continuar.")
         st.stop()
     df, df_eq, df_ot = load_data(uploaded)
 
-# ── Barra lateral – Filtros ───────────────────────────────────────────────────
-st.sidebar.title("🔩 Filtros")
+st.sidebar.title("Filtros")
 
 tipos   = ["Todos"] + sorted(df["TIPO"].dropna().unique().tolist())
 marcas  = ["Todas"] + sorted(df["MARCA"].dropna().unique().tolist())
@@ -88,14 +84,12 @@ sel_marca = st.sidebar.selectbox("Marca", marcas)
 sel_year  = st.sidebar.selectbox("Año", years)
 top_n     = st.sidebar.slider("Top N refacciones críticas", 5, 30, 15)
 
-# ── Aplicar filtros ───────────────────────────────────────────────────────────
 filt = df.copy()
 if sel_tipo  != "Todos":  filt = filt[filt["TIPO"]  == sel_tipo]
 if sel_marca != "Todas":  filt = filt[filt["MARCA"] == sel_marca]
 if sel_year  != "Todos":  filt = filt[filt["Year"]  == sel_year]
 
-# ── Encabezado ────────────────────────────────────────────────────────────────
-st.title("🔧 Dashboard de Refacciones TEC")
+st.title("Dashboard de Refacciones TEC")
 st.caption(f"Filtros activos: Tipo = **{sel_tipo}** | Marca = **{sel_marca}** | Año = **{sel_year}**")
 st.divider()
 
@@ -113,15 +107,15 @@ def metric_card(title, value):
         <p class="metric-value">{value}</p>
     </div>"""
 
-k1.markdown(metric_card("💰 Costo Total", f"${total_costo:,.0f}"), unsafe_allow_html=True)
-k2.markdown(metric_card("📋 Órdenes de trabajo", f"{total_ordenes:,}"), unsafe_allow_html=True)
-k3.markdown(metric_card("🚛 Equipos únicos", f"{total_equipos:,}"), unsafe_allow_html=True)
-k4.markdown(metric_card("📦 Costo promedio/refacción", f"${costo_promedio:,.0f}"), unsafe_allow_html=True)
+k1.markdown(metric_card("Costo Total", f"${total_costo:,.0f}"), unsafe_allow_html=True)
+k2.markdown(metric_card("Órdenes de trabajo", f"{total_ordenes:,}"), unsafe_allow_html=True)
+k3.markdown(metric_card("Equipos únicos", f"{total_equipos:,}"), unsafe_allow_html=True)
+k4.markdown(metric_card("Costo promedio/refacción", f"${costo_promedio:,.0f}"), unsafe_allow_html=True)
 
 st.divider()
 
 # ── Refacciones Críticas ──────────────────────────────────────────────────────
-st.subheader(f"🚨 Top {top_n} Refacciones Críticas (por costo total)")
+st.subheader(f"Top {top_n} Refacciones Críticas (por costo total)")
 
 critical = (
     filt.groupby("Refaccion")["Costo"]
@@ -164,7 +158,7 @@ with col_table:
 st.divider()
 
 # ── Distribución por Tipo / Marca ─────────────────────────────────────────────
-st.subheader("📊 Distribución de Costos")
+st.subheader("Distribución de Costos")
 
 col_tipo, col_marca = st.columns(2)
 
@@ -194,7 +188,7 @@ with col_marca:
 st.divider()
 
 # ── Evolución temporal ────────────────────────────────────────────────────────
-st.subheader("📅 Evolución Mensual del Gasto en Refacciones")
+st.subheader("Evolución Mensual del Gasto en Refacciones")
 
 monthly = (
     filt[filt["Month"] != "NaT"]
@@ -215,7 +209,7 @@ st.plotly_chart(fig_line, use_container_width=True)
 st.divider()
 
 # ── Scatter: frecuencia vs costo ──────────────────────────────────────────────
-st.subheader("🔍 Análisis de Criticidad: Frecuencia vs Costo Unitario")
+st.subheader("Análisis de Criticidad: Frecuencia vs Costo Unitario")
 st.caption("Las refacciones en la esquina superior derecha son las más críticas (caras y frecuentes).")
 
 scatter_df = (
@@ -249,7 +243,7 @@ st.plotly_chart(fig_scatter, use_container_width=True)
 st.divider()
 
 # ── Tabla completa filtrada ───────────────────────────────────────────────────
-with st.expander("📋 Ver tabla completa de datos filtrados"):
+with st.expander("Ver tabla completa de datos filtrados"):
     show_cols = ["Order", "Refaccion", "Costo", "Equipment", "MARCA", "MODELO", "TIPO", "Year", "Vendor"]
     st.dataframe(
         filt[show_cols].sort_values("Costo", ascending=False),
