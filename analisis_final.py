@@ -16,16 +16,52 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Metric cards */
     .metric-card {
-        background: #f0f4ff;
+        background: rgba(67, 97, 238, 0.12);
         border-radius: 10px;
         padding: 16px 20px;
         border-left: 4px solid #4361ee;
         margin-bottom: 8px;
     }
-    .metric-title { font-size: 13px; color: #555; margin: 0; }
-    .metric-value { font-size: 26px; font-weight: 700; color: #1a1a2e; margin: 4px 0 0; }
-    h1 { color: #1a1a2e; }
+    .metric-title {
+        font-size: 13px;
+        color: inherit;
+        opacity: 0.7;
+        margin: 0;
+    }
+    .metric-value {
+        font-size: 26px;
+        font-weight: 700;
+        color: inherit;
+        margin: 4px 0 0;
+    }
+
+    /* Inventory product cards */
+    .inv-card {
+        background: rgba(99, 102, 241, 0.1);
+        border-radius: 10px;
+        padding: 14px 18px;
+        border-left: 4px solid #6366f1;
+        margin-bottom: 12px;
+    }
+    .inv-card p {
+        color: inherit;
+        margin: 0;
+    }
+    .inv-card .inv-label {
+        font-size: 12px;
+        opacity: 0.65;
+    }
+    .inv-card .inv-value {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 4px 0 2px;
+    }
+    .inv-card .inv-detail {
+        font-size: 13px;
+        opacity: 0.8;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,7 +102,6 @@ def load_inventarios(path):
     for c in ["Costo_Total", "Cantidad_Total", "Precio_Ponderado"]:
         totales[c] = pd.to_numeric(totales[c], errors="coerce")
 
-    # Inventarios mínimos/máximos por producto y flota
     productos_inv = [
         {
             "Producto": "Aceite Mobil DTE 26 19Lt",
@@ -91,7 +126,6 @@ def load_inventarios(path):
         },
     ]
 
-    # Consumo mensual
     meses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
              "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
 
@@ -121,14 +155,14 @@ except FileNotFoundError:
 try:
     totales_inv, productos_inv, consumo_mensual = load_inventarios(FILE_INV)
 except FileNotFoundError:
-    up_inv = st.file_uploader("Sube Inventarios_mi_nimos___ma_ximos_GCC.xlsx", type="xlsx", key="inv")
+    up_inv = st.file_uploader("Sube min&max_GCC.xlsx", type="xlsx", key="inv")
     if up_inv is None:
         st.info("Sube el archivo de inventarios para continuar.")
         st.stop()
     totales_inv, productos_inv, consumo_mensual = load_inventarios(up_inv)
 
 
-# Barra Filtros
+# Filtros
 st.sidebar.title("Filtros")
 tipos  = ["Todos"] + sorted(df["TIPO"].dropna().unique().tolist())
 marcas = ["Todas"] + sorted(df["MARCA"].dropna().unique().tolist())
@@ -165,23 +199,21 @@ k4.markdown(metric_card("Costo promedio/refacción", f"${filt['Costo'].mean():,.
 st.divider()
 
 
-# Minimos y maximos
+# Inventarios Mínimos y Máximos
 st.subheader("Inventarios Mínimos y Máximos de Lubricantes")
 st.caption("Niveles calculados con base en consumo 2023-2026 y lead times por tipo de flota.")
 
 t1, t2, t3 = st.columns(3)
 for col, (_, row) in zip([t1, t2, t3], totales_inv.iterrows()):
-    col.markdown(f"""
-    <div style="background:#f8fafc; border-radius:10px; padding:14px 18px;
-                border-left:4px solid #6366f1; margin-bottom:12px;">
-        <p style="font-size:12px; color:#555; margin:0"> {row['Refaccion']}</p>
-        <p style="font-size:22px; font-weight:700; margin:4px 0 0; color:#1a1a2e">
-            {int(row['Cantidad_Total']):,} unid.</p>
-        <p style="font-size:13px; color:#666; margin:2px 0 0">
-            Costo total: <b>${row['Costo_Total']:,.0f}</b> &nbsp;|&nbsp;
-            Precio pond.: <b>${row['Precio_Ponderado']:.2f}</b>/unid.
-        </p>
-    </div>""", unsafe_allow_html=True)
+    col.markdown(
+        f'<div class="inv-card">'
+        f'<p class="inv-label">🛢️ {row["Refaccion"]}</p>'
+        f'<p class="inv-value">{int(row["Cantidad_Total"]):,} unid.</p>'
+        f'<p class="inv-detail">Costo total: <b>${row["Costo_Total"]:,.0f}</b>'
+        f' &nbsp;|&nbsp; Precio pond.: <b>${row["Precio_Ponderado"]:.2f}</b>/unid.</p>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 st.markdown("##### Niveles de inventario por producto y flota")
 flotas_mostrar = (["Flota China"] if sel_flota == "Flota China"
@@ -193,24 +225,16 @@ for prod in productos_inv:
     for flota in flotas_mostrar:
         d = prod[flota]
         rows_table.append({
-            "Producto":            prod["Producto"],
-            "Flota":               flota,
-            "Inv. Mín. (AVG LT)":  round(float(d["inv_min_avg"]), 1) if d["inv_min_avg"] else "—",
-            "Inv. Mín. (MAX LT)":  round(float(d["inv_min_max"]), 1) if d["inv_min_max"] else "—",
-            "Inv. Máx. (AVG LT)":  round(float(d["inv_max_avg"]), 1) if d["inv_max_avg"] else "—",
-            "Inv. Máx. (MAX LT)":  round(float(d["inv_max_max"]), 1) if d["inv_max_max"] else "—",
+            "Producto":           prod["Producto"],
+            "Flota":              flota,
+            "Inv. Mín. (AVG LT)": round(float(d["inv_min_avg"]), 1) if d["inv_min_avg"] else "—",
+            "Inv. Mín. (MAX LT)": round(float(d["inv_min_max"]), 1) if d["inv_min_max"] else "—",
+            "Inv. Máx. (AVG LT)": round(float(d["inv_max_avg"]), 1) if d["inv_max_avg"] else "—",
+            "Inv. Máx. (MAX LT)": round(float(d["inv_max_max"]), 1) if d["inv_max_max"] else "—",
         })
 
-df_minmax = pd.DataFrame(rows_table)
+st.dataframe(pd.DataFrame(rows_table), hide_index=True, use_container_width=True)
 
-def color_rows(row):
-    color = "#000000" if "China" in str(row["Flota"]) else "#000000"
-    return [f"background-color: white"] * len(row)
-
-st.dataframe(df_minmax.style.apply(color_rows, axis=1),
-             hide_index=True, use_container_width=True)
-
-# Gráfico barras min/max
 st.markdown("##### Comparación visual Mínimo vs Máximo (AVG Lead Time)")
 chart_data = []
 for prod in productos_inv:
@@ -229,7 +253,14 @@ fig_minmax = px.bar(
     labels={"Valor": "Unidades", "Producto": ""},
     title="Inventario Mínimo y Máximo por lubricante y flota (unidades)",
 )
-fig_minmax.update_layout(height=370, xaxis_tickangle=-15, legend_title="")
+fig_minmax.update_layout(
+    height=370,
+    xaxis_tickangle=-15,
+    legend_title="",
+    paper_bgcolor="rgba(0,0,0,0)",   
+    plot_bgcolor="rgba(0,0,0,0)",
+    font_color=None,                 
+)
 st.plotly_chart(fig_minmax, use_container_width=True)
 
 # Consumo mensual
@@ -242,7 +273,13 @@ fig_consumo = px.line(
     title="Consumo mensual por lubricante",
     color_discrete_sequence=px.colors.qualitative.Set2,
 )
-fig_consumo.update_layout(height=340, xaxis_tickangle=-30, legend_title="")
+fig_consumo.update_layout(
+    height=340,
+    xaxis_tickangle=-30,
+    legend_title="",
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+)
 st.plotly_chart(fig_consumo, use_container_width=True)
 
 st.divider()
@@ -271,9 +308,14 @@ with col_chart:
         title="Costo acumulado por refacción",
     )
     fig_bar.update_traces(textposition="outside")
-    fig_bar.update_layout(coloraxis_showscale=False, height=480,
-                          margin=dict(l=20, r=20, t=40, b=20),
-                          yaxis=dict(tickfont=dict(size=11)))
+    fig_bar.update_layout(
+        coloraxis_showscale=False,
+        height=480,
+        margin=dict(l=20, r=20, t=40, b=20),
+        yaxis=dict(tickfont=dict(size=11)),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with col_table:
@@ -295,6 +337,7 @@ with col_tipo:
                      title="Costo total por Tipo de Equipo",
                      color_discrete_sequence=px.colors.qualitative.Set2)
     fig_pie.update_traces(textinfo="label+percent", textposition="outside")
+    fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_pie, use_container_width=True)
 
 with col_marca:
@@ -303,7 +346,11 @@ with col_marca:
                        color_discrete_sequence=px.colors.qualitative.Bold,
                        title="Costo total por Marca",
                        labels={"Costo": "Costo (MXN)", "MARCA": "Marca"})
-    fig_marca.update_layout(showlegend=False)
+    fig_marca.update_layout(
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
     st.plotly_chart(fig_marca, use_container_width=True)
 
 st.divider()
@@ -321,7 +368,12 @@ fig_line = px.area(monthly, x="Month", y="Costo",
                    title="Gasto mensual (MXN)",
                    labels={"Month": "Mes", "Costo": "Costo (MXN)"},
                    color_discrete_sequence=["#4361ee"])
-fig_line.update_layout(height=320, xaxis_tickangle=-45)
+fig_line.update_layout(
+    height=320,
+    xaxis_tickangle=-45,
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+)
 st.plotly_chart(fig_line, use_container_width=True)
 
 st.divider()
@@ -350,7 +402,12 @@ fig_scatter = px.scatter(
             "Costo_Total": "Costo Total (MXN)"},
     title="Top 100 refacciones – tamaño = costo total",
 )
-fig_scatter.update_layout(height=450, coloraxis_showscale=False)
+fig_scatter.update_layout(
+    height=450,
+    coloraxis_showscale=False,
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+)
 st.plotly_chart(fig_scatter, use_container_width=True)
 
 st.divider()
@@ -364,4 +421,4 @@ with st.expander("Ver tabla completa de datos filtrados"):
     st.caption(f"Total de registros: {len(filt):,}")
 
 st.markdown("---")
-st.caption("Dashboard desarrollado con Streamlit + Plotly · TEC")
+st.caption("Dashboard desarrollado con Streamlit + Plotly · GCC")
