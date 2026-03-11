@@ -89,7 +89,7 @@ if sel_tipo  != "Todos":  filt = filt[filt["TIPO"]  == sel_tipo]
 if sel_marca != "Todas":  filt = filt[filt["MARCA"] == sel_marca]
 if sel_year  != "Todos":  filt = filt[filt["Year"]  == sel_year]
 
-st.title("Dashboard de Refacciones TEC")
+st.title("Dashboard de Refacciones")
 st.caption(f"Filtros activos: Tipo = **{sel_tipo}** | Marca = **{sel_marca}** | Año = **{sel_year}**")
 st.divider()
 
