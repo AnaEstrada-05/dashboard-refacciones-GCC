@@ -14,6 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
+
 st.markdown("""
 <style>
     /* Metric cards */
@@ -197,23 +198,6 @@ k3.markdown(metric_card("Equipos únicos",           f"{filt['Equipment'].nuniqu
 k4.markdown(metric_card("Costo promedio/refacción", f"${filt['Costo'].mean():,.0f}"),    unsafe_allow_html=True)
 
 st.divider()
-
-
-# Inventarios Mínimos y Máximos
-st.subheader("Inventarios Mínimos y Máximos de Lubricantes")
-st.caption("Niveles calculados con base en consumo 2023-2026 y lead times por tipo de flota.")
-
-t1, t2, t3 = st.columns(3)
-for col, (_, row) in zip([t1, t2, t3], totales_inv.iterrows()):
-    col.markdown(
-        f'<div class="inv-card">'
-        f'<p class="inv-label">🛢️ {row["Refaccion"]}</p>'
-        f'<p class="inv-value">{int(row["Cantidad_Total"]):,} unid.</p>'
-        f'<p class="inv-detail">Costo total: <b>${row["Costo_Total"]:,.0f}</b>'
-        f' &nbsp;|&nbsp; Precio pond.: <b>${row["Precio_Ponderado"]:.2f}</b>/unid.</p>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
 
 st.markdown("##### Niveles de inventario por producto y flota")
 flotas_mostrar = (["Flota China"] if sel_flota == "Flota China"
