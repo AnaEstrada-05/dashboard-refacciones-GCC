@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Dashboard Refacciones GCC",
-    page_icon="gcc_logo",
+    page_icon="gcc_logo.png",
     layout="wide",
 )
 
@@ -126,7 +126,7 @@ def load_inventarios(file):
 
 # ── Pantalla de carga de archivos ──────────────────────────────────────────────
 def show_upload_screen():
-    st.title("⚙️ Dashboard Refacciones GCC")
+    st.title("Dashboard Refacciones GCC")
     st.markdown("### Carga de archivos de datos")
     st.info("Por seguridad, los archivos **no se almacenan** en el servidor. Debes subirlos cada vez que accedas.", icon="🔒")
     st.markdown("")
@@ -134,7 +134,7 @@ def show_upload_screen():
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('<div class="upload-box">', unsafe_allow_html=True)
-        st.markdown("**📋 Archivo de Refacciones**")
+        st.markdown("**Archivo de Refacciones**")
         st.caption("Debe contener las hojas: *Equipos*, *Ordenes de trabajo*, *Refacciones*")
         up_refac = st.file_uploader(
             "Sube `info_TEC_limpio.xlsx`",
@@ -146,7 +146,7 @@ def show_upload_screen():
 
     with col2:
         st.markdown('<div class="upload-box">', unsafe_allow_html=True)
-        st.markdown("**📦 Archivo de Inventarios Min/Max**")
+        st.markdown("**Archivo de Inventarios Min/Max**")
         st.caption("Debe contener la hoja: *INVENTARIOS MIN-MAX*")
         up_inv = st.file_uploader(
             "Sube `min&max_GCC.xlsx`",
@@ -195,9 +195,9 @@ if st.session_state.df is None or st.session_state.productos_inv is None:
     # Mostrar progreso si solo falta uno
     archivos_ok = []
     if st.session_state.df is not None:
-        archivos_ok.append("✅ Refacciones cargado")
+        archivos_ok.append("Refacciones cargado")
     if st.session_state.productos_inv is not None:
-        archivos_ok.append("✅ Inventarios cargado")
+        archivos_ok.append("Inventarios cargado")
     if archivos_ok:
         st.success("  |  ".join(archivos_ok))
 
@@ -216,7 +216,7 @@ totales_inv     = st.session_state.totales_inv
 productos_inv   = st.session_state.productos_inv
 consumo_mensual = st.session_state.consumo
 
-st.success("✅ Ambos archivos cargados correctamente. Puedes usar los filtros del panel lateral.", icon="✅")
+st.success("Ambos archivos cargados correctamente. Puedes usar los filtros del panel lateral.", icon="✅")
 st.divider()
 
 
@@ -234,7 +234,7 @@ sel_flota = st.sidebar.radio("Flota (inventarios)", ["Flota China", "Flota A/E",
 
 # Botón para limpiar caché y subir nuevos archivos
 st.sidebar.divider()
-if st.sidebar.button("🔄 Cargar nuevos archivos", use_container_width=True):
+if st.sidebar.button("Cargar nuevos archivos", use_container_width=True):
     for key in ["df", "df_eq", "df_ot", "totales_inv", "productos_inv", "consumo"]:
         st.session_state[key] = None
     st.cache_data.clear()
