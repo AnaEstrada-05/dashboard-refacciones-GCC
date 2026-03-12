@@ -170,29 +170,29 @@ if "df" not in st.session_state:
     st.session_state.productos_inv = None
     st.session_state.consumo       = None
 
-up_refac, up_inv = show_upload_screen()
-
-# Procesar archivos cuando se suban
-if up_refac is not None:
-    try:
-        df, df_eq, df_ot = load_refacciones(up_refac)
-        st.session_state.df    = df
-        st.session_state.df_eq = df_eq
-        st.session_state.df_ot = df_ot
-    except Exception as e:
-        st.error(f"Error al leer el archivo de refacciones: {e}")
-
-if up_inv is not None:
-    try:
-        totales_inv, productos_inv, consumo_mensual = load_inventarios(up_inv)
-        st.session_state.totales_inv   = totales_inv
-        st.session_state.productos_inv = productos_inv
-        st.session_state.consumo       = consumo_mensual
-    except Exception as e:
-        st.error(f"Error al leer el archivo de inventarios: {e}")
-
-# Si aún no se han subido ambos archivos, detener aquí
+# Mostrar pantalla de carga SOLO si falta algún archivo
 if st.session_state.df is None or st.session_state.productos_inv is None:
+    up_refac, up_inv = show_upload_screen()
+
+    if up_refac is not None:
+        try:
+            df, df_eq, df_ot = load_refacciones(up_refac)
+            st.session_state.df    = df
+            st.session_state.df_eq = df_eq
+            st.session_state.df_ot = df_ot
+        except Exception as e:
+            st.error(f"Error al leer el archivo de refacciones: {e}")
+
+    if up_inv is not None:
+        try:
+            totales_inv, productos_inv, consumo_mensual = load_inventarios(up_inv)
+            st.session_state.totales_inv   = totales_inv
+            st.session_state.productos_inv = productos_inv
+            st.session_state.consumo       = consumo_mensual
+        except Exception as e:
+            st.error(f"Error al leer el archivo de inventarios: {e}")
+
+    # Mostrar progreso si solo falta uno
     archivos_ok = []
     if st.session_state.df is not None:
         archivos_ok.append("✅ Refacciones cargado")
@@ -200,7 +200,13 @@ if st.session_state.df is None or st.session_state.productos_inv is None:
         archivos_ok.append("✅ Inventarios cargado")
     if archivos_ok:
         st.success("  |  ".join(archivos_ok))
-    st.stop()
+
+    # Si aún falta alguno, no continuar
+    if st.session_state.df is None or st.session_state.productos_inv is None:
+        st.stop()
+
+    # Ambos listos — rerun para limpiar la pantalla de upload
+    st.rerun()
 
 # Recuperar datos del session_state
 df              = st.session_state.df
