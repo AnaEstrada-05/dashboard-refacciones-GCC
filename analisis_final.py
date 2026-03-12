@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Dashboard Refacciones GCC",
-    page_icon="⚙️",
+    page_icon="gcc_logo",
     layout="wide",
 )
 
