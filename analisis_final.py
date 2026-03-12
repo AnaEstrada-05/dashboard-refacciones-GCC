@@ -42,6 +42,9 @@ st.markdown("""
         border: 1.5px dashed #4361ee55;
         margin-bottom: 16px;
     }
+    .crit-alta  { background: rgba(239,68,68,0.12);  border-left: 4px solid #ef4444; border-radius: 8px; padding: 12px 16px; }
+    .crit-media { background: rgba(234,179,8,0.12);  border-left: 4px solid #eab308; border-radius: 8px; padding: 12px 16px; }
+    .crit-baja  { background: rgba(34,197,94,0.12);  border-left: 4px solid #22c55e; border-radius: 8px; padding: 12px 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,6 +127,21 @@ def load_inventarios(file):
     return totales, productos_inv, consumo
 
 
+@st.cache_data
+def load_criticidad(file):
+    df = pd.read_excel(file, sheet_name="MODELO_CRITICIDAD")
+    df.columns = [
+        "Descripción", "Frecuencia", "Tiempo de paro", "Factor camión",
+        "Frecuencia normalizada", "Tiempo de paro normalizado",
+        "CRITICIDAD", "Nivel de criticidad"
+    ]
+    df["Frecuencia"]   = pd.to_numeric(df["Frecuencia"],   errors="coerce")
+    df["Tiempo de paro"] = pd.to_numeric(df["Tiempo de paro"], errors="coerce")
+    df["CRITICIDAD"]   = pd.to_numeric(df["CRITICIDAD"],   errors="coerce")
+    df = df.dropna(subset=["Descripción", "CRITICIDAD"])
+    return df
+
+
 # ── Pantalla de carga de archivos ──────────────────────────────────────────────
 def show_upload_screen():
     st.title("Dashboard Refacciones GCC")
@@ -131,7 +149,7 @@ def show_upload_screen():
     st.info("Por seguridad, los archivos **no se almacenan** en el servidor. Debes subirlos cada vez que accedas.", icon="🔒")
     st.markdown("")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown('<div class="upload-box">', unsafe_allow_html=True)
         st.markdown("**Archivo de Refacciones**")
@@ -156,12 +174,22 @@ def show_upload_screen():
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    return up_refac, up_inv
+    with col3:
+        st.markdown('<div class="upload-box">', unsafe_allow_html=True)
+        st.markdown("**Modelo de Criticidad**")
+        st.caption("Debe contener la hoja: *MODELO_CRITICIDAD*")
+        up_crit = st.file_uploader(
+            "Sube `MODELO_DE_CRITICIDAD_GCC.xlsx`",
+            type=["xlsx"],
+            key="crit",
+            label_visibility="collapsed"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    return up_refac, up_inv, up_crit
 
 
 # ── Flujo principal ────────────────────────────────────────────────────────────
-
-# Verificar si los archivos ya están en session_state (para no perderlos al interactuar)
 if "df" not in st.session_state:
     st.session_state.df            = None
     st.session_state.df_eq         = None
@@ -169,10 +197,12 @@ if "df" not in st.session_state:
     st.session_state.totales_inv   = None
     st.session_state.productos_inv = None
     st.session_state.consumo       = None
+    st.session_state.df_crit       = None
 
-# Mostrar pantalla de carga SOLO si falta algún archivo
-if st.session_state.df is None or st.session_state.productos_inv is None:
-    up_refac, up_inv = show_upload_screen()
+if (st.session_state.df is None
+        or st.session_state.productos_inv is None
+        or st.session_state.df_crit is None):
+    up_refac, up_inv, up_crit = show_upload_screen()
 
     if up_refac is not None:
         try:
@@ -192,20 +222,28 @@ if st.session_state.df is None or st.session_state.productos_inv is None:
         except Exception as e:
             st.error(f"Error al leer el archivo de inventarios: {e}")
 
-    # Mostrar progreso si solo falta uno
+    if up_crit is not None:
+        try:
+            df_crit = load_criticidad(up_crit)
+            st.session_state.df_crit = df_crit
+        except Exception as e:
+            st.error(f"Error al leer el modelo de criticidad: {e}")
+
     archivos_ok = []
     if st.session_state.df is not None:
-        archivos_ok.append("Refacciones cargado")
+        archivos_ok.append("✅ Refacciones")
     if st.session_state.productos_inv is not None:
-        archivos_ok.append("Inventarios cargado")
+        archivos_ok.append("✅ Inventarios")
+    if st.session_state.df_crit is not None:
+        archivos_ok.append("✅ Criticidad")
     if archivos_ok:
         st.success("  |  ".join(archivos_ok))
 
-    # Si aún falta alguno, no continuar
-    if st.session_state.df is None or st.session_state.productos_inv is None:
+    if (st.session_state.df is None
+            or st.session_state.productos_inv is None
+            or st.session_state.df_crit is None):
         st.stop()
 
-    # Ambos listos — rerun para limpiar la pantalla de upload
     st.rerun()
 
 # Recuperar datos del session_state
@@ -215,8 +253,9 @@ df_ot           = st.session_state.df_ot
 totales_inv     = st.session_state.totales_inv
 productos_inv   = st.session_state.productos_inv
 consumo_mensual = st.session_state.consumo
+df_crit         = st.session_state.df_crit
 
-st.success("Ambos archivos cargados correctamente. Puedes usar los filtros del panel lateral.", icon="✅")
+st.success("Archivos cargados correctamente. Puedes usar los filtros del panel lateral.", icon="✅")
 st.divider()
 
 
@@ -232,10 +271,18 @@ sel_year  = st.sidebar.selectbox("Año", years)
 top_n     = st.sidebar.slider("Top N refacciones críticas", 5, 30, 15)
 sel_flota = st.sidebar.radio("Flota (inventarios)", ["Flota China", "Flota A/E", "Ambas"], index=2)
 
-# Botón para limpiar caché y subir nuevos archivos
+st.sidebar.divider()
+st.sidebar.markdown("**Filtros – Modelo de Criticidad**")
+nivel_filter = st.sidebar.multiselect(
+    "Nivel de criticidad",
+    options=["Alta", "Media", "Baja"],
+    default=["Alta", "Media", "Baja"]
+)
+top_crit = st.sidebar.slider("Top N ítems críticos a mostrar", 5, 50, 20)
+
 st.sidebar.divider()
 if st.sidebar.button("Cargar nuevos archivos", use_container_width=True):
-    for key in ["df", "df_eq", "df_ot", "totales_inv", "productos_inv", "consumo"]:
+    for key in ["df", "df_eq", "df_ot", "totales_inv", "productos_inv", "consumo", "df_crit"]:
         st.session_state[key] = None
     st.cache_data.clear()
     st.rerun()
@@ -383,6 +430,170 @@ with col_table:
     st.dataframe(disp, hide_index=True, use_container_width=True, height=460)
 
 st.divider()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── MODELO DE CRITICIDAD ──────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+st.subheader("🔴 Modelo de Criticidad GCC")
+st.caption(
+    "Criticidad = f(Frecuencia normalizada, Tiempo de paro normalizado, Factor camión). "
+    "Umbrales: Alta ≥ 0.65 | Media 0.45–0.65 | Baja < 0.45"
+)
+
+# Aplicar filtro de nivel
+crit_filt = df_crit[df_crit["Nivel de criticidad"].isin(nivel_filter)].copy()
+
+# ── KPIs de criticidad ─────────────────────────────────────────────────────────
+ck1, ck2, ck3, ck4 = st.columns(4)
+n_alta  = int((df_crit["Nivel de criticidad"] == "Alta").sum())
+n_media = int((df_crit["Nivel de criticidad"] == "Media").sum())
+n_baja  = int((df_crit["Nivel de criticidad"] == "Baja").sum())
+score_max = df_crit["CRITICIDAD"].max()
+
+ck1.markdown(metric_card("🔴 Ítems Alta Criticidad",  f"{n_alta:,}"),           unsafe_allow_html=True)
+ck2.markdown(metric_card("🟡 Ítems Media Criticidad", f"{n_media:,}"),          unsafe_allow_html=True)
+ck3.markdown(metric_card("🟢 Ítems Baja Criticidad",  f"{n_baja:,}"),           unsafe_allow_html=True)
+ck4.markdown(metric_card("Score Máximo de Criticidad", f"{score_max:.4f}"),     unsafe_allow_html=True)
+
+st.markdown("")
+
+# ── Distribución de niveles (donut) + Histograma de scores ────────────────────
+col_donut, col_hist = st.columns(2)
+
+with col_donut:
+    dist_data = df_crit["Nivel de criticidad"].value_counts().reset_index()
+    dist_data.columns = ["Nivel", "Cantidad"]
+    fig_donut = px.pie(
+        dist_data, values="Cantidad", names="Nivel", hole=0.5,
+        color="Nivel",
+        color_discrete_map={"Alta": "#ef4444", "Media": "#eab308", "Baja": "#22c55e"},
+        title="Distribución por Nivel de Criticidad",
+    )
+    fig_donut.update_traces(textinfo="label+percent+value", textposition="outside")
+    fig_donut.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        legend_title="Nivel",
+        height=380,
+        annotations=[dict(text=f"{len(df_crit):,}<br>ítems", x=0.5, y=0.5,
+                          font_size=16, showarrow=False)]
+    )
+    st.plotly_chart(fig_donut, use_container_width=True)
+
+with col_hist:
+    fig_hist = px.histogram(
+        df_crit, x="CRITICIDAD", color="Nivel de criticidad", nbins=60,
+        color_discrete_map={"Alta": "#ef4444", "Media": "#eab308", "Baja": "#22c55e"},
+        title="Distribución del Score de Criticidad",
+        labels={"CRITICIDAD": "Score de Criticidad", "count": "Cantidad de ítems"},
+        barmode="overlay",
+    )
+    fig_hist.add_vline(x=0.65, line_dash="dash", line_color="#ef4444",
+                       annotation_text="Umbral Alta (0.65)", annotation_position="top right")
+    fig_hist.add_vline(x=0.45, line_dash="dash", line_color="#eab308",
+                       annotation_text="Umbral Media (0.45)", annotation_position="top right")
+    fig_hist.update_layout(
+        height=380, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        legend_title="Nivel",
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
+
+# ── Top N por score ────────────────────────────────────────────────────────────
+st.markdown(f"##### Top {top_crit} ítems por Score de Criticidad")
+
+top_items = crit_filt.nlargest(top_crit, "CRITICIDAD").copy()
+top_items["Descripción_corta"] = top_items["Descripción"].str[:45]
+
+col_topbar, col_toptable = st.columns([3, 2])
+
+with col_topbar:
+    top_chart = top_items.sort_values("CRITICIDAD", ascending=True)
+    fig_top = px.bar(
+        top_chart,
+        x="CRITICIDAD", y="Descripción_corta", orientation="h",
+        color="Nivel de criticidad",
+        color_discrete_map={"Alta": "#ef4444", "Media": "#eab308", "Baja": "#22c55e"},
+        text=top_chart["CRITICIDAD"].map("{:.4f}".format),
+        labels={"CRITICIDAD": "Score de Criticidad", "Descripción_corta": ""},
+        title=f"Top {top_crit} ítems más críticos",
+    )
+    fig_top.update_traces(textposition="outside")
+    fig_top.update_layout(
+        height=max(400, top_crit * 22),
+        coloraxis_showscale=False,
+        margin=dict(l=10, r=60, t=40, b=20),
+        yaxis=dict(tickfont=dict(size=10)),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        legend_title="Nivel",
+    )
+    st.plotly_chart(fig_top, use_container_width=True)
+
+with col_toptable:
+    st.markdown("#### Detalle")
+    disp_crit = top_items[[
+        "Descripción", "Nivel de criticidad", "CRITICIDAD",
+        "Frecuencia", "Tiempo de paro", "Factor camión"
+    ]].copy()
+    disp_crit["CRITICIDAD"]    = disp_crit["CRITICIDAD"].map("{:.4f}".format)
+    disp_crit["Tiempo de paro"] = disp_crit["Tiempo de paro"].map("{:,.0f}".format)
+    disp_crit.columns = ["Descripción", "Nivel", "Score", "Frecuencia", "T. Paro (min)", "Factor Camión"]
+    st.dataframe(disp_crit, hide_index=True, use_container_width=True,
+                 height=max(420, top_crit * 22))
+
+# ── Scatter: Frecuencia vs Tiempo de Paro ─────────────────────────────────────
+st.markdown("##### Mapa de Criticidad: Frecuencia vs Tiempo de Paro")
+st.caption("Los puntos en la esquina superior derecha son los ítems con mayor impacto operativo.")
+
+scatter_df = crit_filt.copy()
+scatter_df["Descripción_hover"] = scatter_df["Descripción"].str[:60]
+
+fig_scatter_crit = px.scatter(
+    scatter_df,
+    x="Frecuencia", y="Tiempo de paro",
+    color="Nivel de criticidad",
+    size="CRITICIDAD",
+    size_max=20,
+    color_discrete_map={"Alta": "#ef4444", "Media": "#eab308", "Baja": "#22c55e"},
+    hover_name="Descripción_hover",
+    hover_data={
+        "CRITICIDAD": ":.4f",
+        "Frecuencia": ":,",
+        "Tiempo de paro": ":,.0f",
+        "Factor camión": ":.2f",
+        "Nivel de criticidad": True,
+        "Descripción_hover": False,
+    },
+    labels={
+        "Frecuencia": "Frecuencia de falla",
+        "Tiempo de paro": "Tiempo de paro acumulado (min)",
+        "Nivel de criticidad": "Nivel",
+    },
+    title="Frecuencia de falla vs Tiempo de paro · tamaño = Score de Criticidad",
+    log_x=True,
+)
+fig_scatter_crit.update_layout(
+    height=480,
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    legend_title="Nivel",
+)
+st.plotly_chart(fig_scatter_crit, use_container_width=True)
+
+# ── Tabla completa de criticidad ───────────────────────────────────────────────
+with st.expander("Ver tabla completa del Modelo de Criticidad"):
+    full_crit = crit_filt[[
+        "Descripción", "Nivel de criticidad", "CRITICIDAD",
+        "Frecuencia", "Tiempo de paro", "Factor camión",
+        "Frecuencia normalizada", "Tiempo de paro normalizado"
+    ]].copy()
+    full_crit = full_crit.sort_values("CRITICIDAD", ascending=False).reset_index(drop=True)
+    full_crit["CRITICIDAD"] = full_crit["CRITICIDAD"].map("{:.4f}".format)
+    full_crit["Frecuencia normalizada"] = full_crit["Frecuencia normalizada"].map("{:.6f}".format)
+    full_crit["Tiempo de paro normalizado"] = full_crit["Tiempo de paro normalizado"].map("{:.6f}".format)
+    st.dataframe(full_crit, use_container_width=True, height=400, hide_index=True)
+    st.caption(f"Total de registros (con filtro de nivel): {len(full_crit):,} de {len(df_crit):,}")
+
+st.divider()
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 # ── Distribución Tipo / Marca ──────────────────────────────────────────────────
